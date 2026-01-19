@@ -158,3 +158,46 @@ impl OpenAlexClient {
         Ok(vec![])
     }
 }
+
+pub struct DiscoveryOrchestrator {
+    ss_client: SemanticScholarClient,
+    arxiv_client: ArxivClient,
+    open_alex_client: OpenAlexClient,
+}
+
+impl DiscoveryOrchestrator {
+    pub fn new(ss_api_key: Option<String>, open_alex_email: Option<String>) -> Self {
+        Self {
+            ss_client: SemanticScholarClient::new(ss_api_key),
+            arxiv_client: ArxivClient::new(),
+            open_alex_client: OpenAlexClient::new(open_alex_email),
+        }
+    }
+
+    pub async fn search_all(&self, query: &DiscoveryQuery) -> Vec<PaperMetadata> {
+        let ss_fut = self.ss_client.search(query);
+        let arxiv_fut = self.arxiv_client.search(query);
+        let oa_fut = self.open_alex_client.search(query);
+
+        let (ss_res, arxiv_res, oa_res) = tokio::join!(ss_fut, arxiv_fut, oa_fut);
+
+        let mut all_results = Vec::new();
+
+        match ss_res {
+            Ok(results) => all_results.extend(results),
+            Err(e) => println!("Warning: Semantic Scholar discovery failed: {}", e),
+        }
+
+        match arxiv_res {
+            Ok(results) => all_results.extend(results),
+            Err(e) => println!("Warning: arXiv discovery failed: {}", e),
+        }
+
+        match oa_res {
+            Ok(results) => all_results.extend(results),
+            Err(e) => println!("Warning: OpenAlex discovery failed: {}", e),
+        }
+
+        all_results
+    }
+}

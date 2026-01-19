@@ -1,4 +1,4 @@
-use anyhow::Result;
+// Basic legality checker for Open Access
 use crate::layers::PaperMetadata;
 
 pub struct LegalityChecker;

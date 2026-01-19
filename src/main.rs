@@ -1,7 +1,7 @@
 mod layers;
 
 use crate::layers::{DiscoveryQuery};
-use crate::layers::discovery::SemanticScholarClient;
+// use crate::layers::discovery::SemanticScholarClient;
 use crate::layers::resolution::Resolver;
 use crate::layers::download::Downloader;
 use dotenvy::dotenv;
@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
     let download_dir = env::var("DOWNLOAD_DIR").unwrap_or_else(|_| "downloads".to_string());
 
     // 1. Discovery (Layer 1)
-    println!("--- Step 1: Discovery ---");
+    println!("--- Step 1: Discovery (Parallel) ---");
     let query = DiscoveryQuery {
         title: Some("Attention is All You Need".to_string()),
         author: None,
@@ -32,9 +32,9 @@ async fn main() -> Result<()> {
         category: Some("cs.CL".to_string()),
     };
 
-    let ss_client = SemanticScholarClient::new(ss_api_key);
-    let results = ss_client.search(&query).await?;
-    println!("Found {} candidates from Semantic Scholar.", results.len());
+    let orchestrator = crate::layers::discovery::DiscoveryOrchestrator::new(ss_api_key, email);
+    let results = orchestrator.search_all(&query).await;
+    println!("Found {} candidates from combined sources.", results.len());
 
     // 2. Resolution (Layer 2)
     println!("\n--- Step 2: Fuzzy Resolution ---");
