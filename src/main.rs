@@ -9,7 +9,7 @@ use std::env;
 use anyhow::{Result};
 use clap::Parser;
 
-/// CS Researcher: Automated Research Paper Downloader
+/// OpenScholar: Intelligent Research Discovery Engine
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {

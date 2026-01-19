@@ -1,6 +1,6 @@
-# CS Researcher: Automated Paper Downloader
+# OpenScholar: Intelligent Research Discovery Engine
 
-A Rust-based tool for automated discovery, resolution, and downloading of open-access research papers.
+A Rust-based tool for the automated discovery, resolution, and downloading of open-access research papers. OpenScholar intelligently aggregates results from Semantic Scholar, arXiv, and OpenAlex to find the most relevant, legally downloadable PDF for your queries.
 
 ## Features
 
