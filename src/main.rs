@@ -32,6 +32,10 @@ struct Args {
     /// Custom Levenshtein threshold for fuzzy matching
     #[arg(long, default_value_t = 5)]
     threshold: usize,
+
+    /// Maximum number of results to return
+    #[arg(short = 'n', long, default_value_t = 10)]
+    limit: usize,
 }
 
 #[tokio::main]
@@ -78,6 +82,7 @@ async fn main() -> Result<()> {
         author: args.author.clone(),
         university: args.university.clone(),
         category: args.category.clone(),
+        limit: args.limit,
     };
 
     let orchestrator = DiscoveryOrchestrator::new(ss_api_key, email);
@@ -102,7 +107,9 @@ async fn main() -> Result<()> {
 
     // Interactive Selection
     println!("\n--- candidates found ---");
-    for (i, (paper, dist)) in sorted_matches.iter().enumerate().take(10) {
+    // Interactive Selection
+    println!("\n--- candidates found ---");
+    for (i, (paper, dist)) in sorted_matches.iter().enumerate().take(args.limit) {
         let source_hint = if paper.arxiv_id.is_some() { "[ArXiv]" } else if paper.open_alex_id.is_some() { "[OpenAlex]" } else { "[SemanticScholar]" };
         let oa_status = if paper.is_oa { "Open Access" } else { "Closed Access" };
         println!("[{}] {} (Dist: {}) {} - {}", i + 1, paper.title, dist, source_hint, oa_status);
@@ -120,7 +127,7 @@ async fn main() -> Result<()> {
     }
 
     let indices: Vec<usize> = if input.eq_ignore_ascii_case("all") {
-        (0..sorted_matches.len().min(10)).collect()
+        (0..sorted_matches.len().min(args.limit)).collect()
     } else {
         input.split(',')
             .filter_map(|s| s.trim().parse::<usize>().ok())

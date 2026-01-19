@@ -37,11 +37,7 @@ impl Downloader {
                              .replace("https://", "")
                              .replace(|c: char| !c.is_alphanumeric() && c != '.' && c != '-', "_");
 
-        let target_dir = self.base_dir.join(&paper_id);
-        create_dir_all(&target_dir).await?;
-
         // Download PDF
-        let pdf_path = target_dir.join("paper.pdf");
         tracing::info!("Downloading PDF from: {}", pdf_url);
         let mut response = self.client.get(pdf_url).send().await?;
         
@@ -51,6 +47,11 @@ impl Downloader {
             return Err(anyhow!(err));
         }
 
+        // Only create directory if request was successful
+        let target_dir = self.base_dir.join(&paper_id);
+        create_dir_all(&target_dir).await?;
+        
+        let pdf_path = target_dir.join("paper.pdf");
         let mut file = File::create(&pdf_path).await?;
         while let Some(chunk) = response.chunk().await? {
             file.write_all(&chunk).await?;

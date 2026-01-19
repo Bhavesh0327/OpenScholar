@@ -86,7 +86,7 @@ impl SemanticScholarClient {
             query.push(' ');
         }
         
-        let url = format!("https://api.semanticscholar.org/graph/v1/paper/search?query={}&fields=title,authors,year,venue,abstract,externalIds,isOpenAccess,openAccessPdf&limit=10", urlencoding::encode(query.trim()));
+        let url = format!("https://api.semanticscholar.org/graph/v1/paper/search?query={}&fields=title,authors,year,venue,abstract,externalIds,isOpenAccess,openAccessPdf&limit={}", urlencoding::encode(query.trim()), query_params.limit);
         
         let mut request = self.client.get(&url);
         if let Some(key) = &self.api_key {
@@ -150,7 +150,7 @@ impl ArxivClient {
             query.push_str(&format!("all:\"{}\"", uni));
         }
 
-        let url = format!("http://export.arxiv.org/api/query?search_query={}&start=0&max_results=10", urlencoding::encode(&query));
+        let url = format!("http://export.arxiv.org/api/query?search_query={}&start=0&max_results={}", urlencoding::encode(&query), query_params.limit);
         tracing::info!("Querying arXiv: {}", url);
         
         match self.client.get(&url).send().await {
@@ -396,6 +396,14 @@ impl OpenAlexClient {
             url.push_str("search=");
             url.push_str(&urlencoding::encode(&search_parts.join(" ")));
         }
+
+        // Add limit
+        if url.contains('?') {
+            url.push_str("&");
+        } else {
+            url.push_str("?");
+        }
+        url.push_str(&format!("per_page={}", query_params.limit));
         
         if let Some(email) = &self.email {
             url.push_str(&format!("&mailto={}", email));

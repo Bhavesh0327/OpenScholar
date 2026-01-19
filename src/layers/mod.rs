@@ -22,6 +22,7 @@ pub struct DiscoveryQuery {
     #[allow(dead_code)]
     pub university: Option<String>,
     pub category: Option<String>,
+    pub limit: usize,
 }
 
 pub mod discovery;
