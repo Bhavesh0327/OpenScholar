@@ -1,6 +1,6 @@
-use openscholar::layers::{DiscoveryQuery};
-use openscholar::layers::resolution::Resolver;
+use openscholar::layers::{DiscoveryQuery, DownloadRecord, PaperMetadata};
 use openscholar::layers::download::Downloader;
+use openscholar::layers::legality::LegalityChecker;
 use openscholar::layers::discovery::DiscoveryOrchestrator;
 use dotenvy::dotenv;
 use std::env;
@@ -27,6 +27,10 @@ struct Args {
     #[arg(short, long)]
     university: Option<String>,
 
+    /// Free-text topic search (no title matching)
+    #[arg(long)]
+    topic: Option<String>,
+
     /// Custom Levenshtein threshold for fuzzy matching
     #[arg(long, default_value_t = 5)]
     threshold: usize,
@@ -34,6 +38,18 @@ struct Args {
     /// Maximum number of results to return
     #[arg(short = 'n', long, default_value_t = 10)]
     limit: usize,
+
+    /// Print a versioned JSON result to stdout (implies --non-interactive)
+    #[arg(long)]
+    json: bool,
+
+    /// Download the top --limit downloadable papers without prompting
+    #[arg(long)]
+    non_interactive: bool,
+
+    /// Only search; no downloads and no files written to DOWNLOAD_DIR
+    #[arg(long)]
+    metadata_only: bool,
 }
 
 #[tokio::main]
@@ -64,125 +80,105 @@ async fn main() -> Result<()> {
     }
 
     let args = Args::parse();
+    let unattended = args.json || args.non_interactive;
 
-    if args.title.is_none() && args.author.is_none() && args.university.is_none() {
-        tracing::error!("Please provide at least a --title, --author, or --university.");
-        tracing::info!("Use --help for more information.");
-        return Ok(());
+    if args.title.is_none() && args.author.is_none() && args.university.is_none() && args.category.is_none() && args.topic.is_none() {
+        eprintln!("error: provide at least one of --title, --topic, --author, --category, --university (see --help)");
+        std::process::exit(2);
     }
 
-    let ss_api_key = env::var("SEMANTIC_SCHOLAR_API_KEY").ok();
+    let ss_api_key = env::var("SEMANTIC_SCHOLAR_API_KEY").ok().filter(|k| !k.is_empty());
     let email = env::var("OPENALEX_EMAIL").ok();
     let download_dir = env::var("DOWNLOAD_DIR").unwrap_or_else(|_| "downloads".to_string());
-    
-    // Ensure download directory exists
-    if !std::path::Path::new(&download_dir).exists() {
-        tracing::info!("Creating download directory: {}", download_dir);
-        std::fs::create_dir_all(&download_dir)?;
-    }
 
-    // 1. Discovery (Layer 1)
-    tracing::info!("--- Step 1: Discovery (Parallel) ---");
     let query = DiscoveryQuery {
         title: args.title.clone(),
         author: args.author.clone(),
         university: args.university.clone(),
         category: args.category.clone(),
+        topic: args.topic.clone(),
         limit: args.limit,
     };
 
-    let orchestrator = DiscoveryOrchestrator::new(ss_api_key, email);
-    let results = orchestrator.search_all(&query).await;
-    tracing::info!("Found {} candidates from combined sources.", results.len());
+    let mut orchestrator = DiscoveryOrchestrator::new(ss_api_key, email);
+    if let Ok(url) = env::var("OPENSCHOLAR_SEMANTIC_SCHOLAR_URL") { orchestrator.ss_client.base_url = url; }
+    if let Ok(url) = env::var("OPENSCHOLAR_ARXIV_URL") { orchestrator.arxiv_client.base_url = url; }
+    if let Ok(url) = env::var("OPENSCHOLAR_OPENALEX_URL") { orchestrator.open_alex_client.base_url = url; }
 
-    if results.is_empty() {
-        tracing::warn!("No papers found in discovery phase.");
-        return Ok(());
+    let mut result = orchestrator.discover(&query, args.threshold).await;
+    for status in &result.source_statuses {
+        tracing::info!("Source {}: ok={} results={} latency={}ms error={:?}", status.source, status.ok, status.result_count, status.latency_ms, status.error);
+        if !status.ok {
+            eprintln!("warning: {} failed: {}", status.source, status.error.as_deref().unwrap_or("unknown error"));
+        }
     }
 
-    // 2. Resolution (Layer 2)
-    tracing::info!("--- Step 2: Fuzzy Resolution ---");
-    let search_title = args.title.as_deref().unwrap_or("");
-    let matches = Resolver::resolve(search_title, results, args.threshold);
-    let all_sorted = Resolver::sort_by_similarity(matches);
+    let (downloadable, unavailable): (Vec<_>, Vec<_>) = result.papers.iter().cloned()
+        .partition(|p| p.is_oa && p.pdf_url.is_some());
 
-    // Filter: Only show papers that are Open Access AND have a PDF URL
-    let (sorted_matches, unavailable_matches): (Vec<_>, Vec<_>) = all_sorted.into_iter()
-        .partition(|(p, _)| p.is_oa && p.pdf_url.is_some());
-
-    // Save unavailable papers
-    if !unavailable_matches.is_empty() {
-        let unavailable_papers: Vec<_> = unavailable_matches.into_iter().map(|(p, _)| p).collect();
-        let downloader = openscholar::layers::download::Downloader::new(download_dir.clone());
-        if let Err(e) = downloader.save_unavailable(&query, unavailable_papers).await {
+    if !args.metadata_only {
+        std::fs::create_dir_all(&download_dir)?;
+        if let Err(e) = Downloader::new(download_dir.clone()).save_unavailable(&query, unavailable).await {
             tracing::warn!("Failed to save unavailable papers: {}", e);
         }
     }
-    
-    if sorted_matches.is_empty() {
-        tracing::warn!("No downloadable (Open Access + PDF) matches found within threshold {}.", args.threshold);
-        return Ok(());
-    }
 
-    // Interactive Selection
-    println!("\n--- candidates found ---");
-    // Interactive Selection
-    println!("\n--- candidates found ---");
-    for (i, (paper, dist)) in sorted_matches.iter().enumerate().take(args.limit) {
-        let source_hint = if paper.arxiv_id.is_some() { "[ArXiv]" } else if paper.open_alex_id.is_some() { "[OpenAlex]" } else { "[SemanticScholar]" };
-        let oa_status = if paper.is_oa { "Open Access" } else { "Closed Access" };
-        println!("[{}] {} (Dist: {}) {} - {}", i + 1, paper.title, dist, source_hint, oa_status);
-    }
-
-    println!("\nEnter numbers to download (e.g., '1', '1,3'), 'all' for top 10, or 'q' to quit:");
-    
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input)?;
-    let input = input.trim();
-
-    if input.eq_ignore_ascii_case("q") {
-        tracing::info!("Exiting.");
-        return Ok(());
-    }
-
-    let indices: Vec<usize> = if input.eq_ignore_ascii_case("all") {
-        (0..sorted_matches.len().min(args.limit)).collect()
+    let selected: Vec<&PaperMetadata> = if args.metadata_only {
+        Vec::new()
+    } else if unattended {
+        downloadable.iter().take(args.limit).collect()
     } else {
-        input.split(',')
-            .filter_map(|s| s.trim().parse::<usize>().ok())
-            .map(|i| i.wrapping_sub(1)) // Convert 1-based to 0-based
-            .filter(|&i| i < sorted_matches.len())
-            .collect()
+        if downloadable.is_empty() {
+            eprintln!("No downloadable (Open Access + PDF) matches found.");
+            return Ok(());
+        }
+        println!("\n--- candidates found ---");
+        for (i, paper) in downloadable.iter().enumerate().take(args.limit) {
+            let oa_status = if paper.is_oa { "Open Access" } else { "Closed Access" };
+            println!("[{}] {} [{}] - {}", i + 1, paper.title, paper.sources.join(", "), oa_status);
+        }
+
+        println!("\nEnter numbers to download (e.g., '1', '1,3'), 'all' for top {}, or 'q' to quit:", args.limit);
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input.eq_ignore_ascii_case("q") {
+            return Ok(());
+        }
+        if input.eq_ignore_ascii_case("all") {
+            downloadable.iter().take(args.limit).collect()
+        } else {
+            input.split(',')
+                .filter_map(|s| s.trim().parse::<usize>().ok())
+                .filter_map(|i| downloadable.get(i.wrapping_sub(1)))
+                .collect()
+        }
     };
 
-    if indices.is_empty() {
-        tracing::warn!("No valid selection made.");
-        return Ok(());
-    }
-
-    // 4. Download (Layer 4)
-    tracing::info!("--- Step 3: Download ---");
     let downloader = Downloader::new(download_dir);
-    
-    for idx in indices {
-        let (paper, _) = &sorted_matches[idx];
-        
-        // 3. Legality Check (Layer 3) - Late binding check
-        if !openscholar::layers::legality::LegalityChecker::is_legally_downloadable(paper) {
-            tracing::warn!("Skipping '{}': Not Open Access.", paper.title);
+    for paper in selected {
+        if !LegalityChecker::is_legally_downloadable(paper) {
             continue;
         }
-
-        if paper.pdf_url.is_none() {
-             tracing::warn!("Skipping '{}': No PDF URL available.", paper.title);
-             continue;
-        }
-
         tracing::info!("Downloading: {}", paper.title);
-        match downloader.download_paper(paper).await {
-            Ok(path) => tracing::info!("Success! Saved to: {:?}", path),
-            Err(e) => tracing::error!("Failed to download '{}': {}", paper.title, e),
+        let record = match downloader.download_paper(paper).await {
+            Ok(path) => DownloadRecord { id: paper.id.clone(), path: Some(path.to_string_lossy().into_owned()), error: None },
+            Err(e) => {
+                eprintln!("warning: download failed for '{}': {}", paper.title, e);
+                DownloadRecord { id: paper.id.clone(), path: None, error: Some(e.to_string()) }
+            }
+        };
+        if !args.json {
+            if let Some(path) = &record.path { println!("Saved: {}", path); }
         }
+        result.downloads.push(record);
+    }
+
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+    } else if result.papers.is_empty() {
+        eprintln!("No papers found.");
     }
 
     Ok(())
