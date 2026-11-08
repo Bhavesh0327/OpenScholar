@@ -1,7 +1,63 @@
 use anyhow::{Result, anyhow};
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::Deserialize;
-use crate::layers::{PaperMetadata, DiscoveryQuery};
+use crate::layers::{PaperMetadata, DiscoveryQuery, SourceStatus, LiteratureResult, SCHEMA_VERSION};
+use crate::layers::resolution::Resolver;
+use crate::layers::identity;
+use std::time::{Duration, Instant};
+
+type Limiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
+
+const MAX_ATTEMPTS: u32 = 3;
+const MAX_RETRY_WAIT: Duration = Duration::from_secs(30);
+
+#[derive(Debug)]
+pub struct HttpError {
+    pub source: &'static str,
+    pub status: u16,
+}
+
+impl std::fmt::Display for HttpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} API error: {}", self.source, StatusCode::from_u16(self.status).map(|s| s.to_string()).unwrap_or_else(|_| self.status.to_string()))
+    }
+}
+
+impl std::error::Error for HttpError {}
+
+fn http_client() -> Client {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("failed to build HTTP client")
+}
+
+/// Rate-limited GET returning the body. Retries 429 and 5xx, honouring `Retry-After` (seconds) or backing off 1s, 2s, ...
+async fn fetch(source: &'static str, request: RequestBuilder, limiter: &Limiter) -> Result<String> {
+    let mut attempt = 1;
+    loop {
+        limiter.until_ready().await;
+        let resp = request.try_clone().expect("GET requests are cloneable").send().await
+            .map_err(|e| anyhow!("{} request failed: {}", source, e))?;
+        let status = resp.status();
+        if status.is_success() {
+            return Ok(resp.text().await?);
+        }
+        let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+        if !retryable || attempt >= MAX_ATTEMPTS {
+            return Err(HttpError { source, status: status.as_u16() }.into());
+        }
+        let wait = resp.headers().get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok()?.parse::<u64>().ok())
+            .map(Duration::from_secs)
+            .unwrap_or(Duration::from_secs(1 << (attempt - 1)))
+            .min(MAX_RETRY_WAIT);
+        tracing::warn!("{} returned {}, retry {}/{} in {:?}", source, status, attempt, MAX_ATTEMPTS - 1, wait);
+        tokio::time::sleep(wait).await;
+        attempt += 1;
+    }
+}
 
 #[derive(Deserialize)]
 struct SSResult {
@@ -52,28 +108,23 @@ pub struct SemanticScholarClient {
     pub base_url: String,
     client: Client,
     api_key: Option<String>,
-    limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    limiter: Arc<Limiter>,
 }
 
 impl SemanticScholarClient {
     pub fn new(api_key: Option<String>) -> Self {
-        // Set quota: 10 requests per second (safe default)
-        // If the user asked for 500/s, but 429 happens at much lower, we start safe.
-        // Let's implement what was asked: < 500. Let's go with 400.
-        let quota = Quota::per_second(nonzero!(400u32));
-        
+        // Semantic Scholar's documented keyed limit is 1 req/s; the anonymous pool is shared and stricter.
+        let quota = Quota::per_second(nonzero!(1u32));
+
         Self {
             base_url: "https://api.semanticscholar.org".to_string(),
-            client: Client::new(),
+            client: http_client(),
             api_key,
             limiter: Arc::new(RateLimiter::direct(quota)),
         }
     }
 
     pub async fn search(&self, query_params: &DiscoveryQuery) -> Result<Vec<PaperMetadata>> {
-        // Wait for permission
-        self.limiter.until_ready().await;
-
         let url = Self::build_url(&self.base_url, query_params);
 
         let mut request = self.client.get(&url);
@@ -82,15 +133,7 @@ impl SemanticScholarClient {
         }
 
         tracing::info!("Querying Semantic Scholar: {}", url);
-        match request.send().await {
-            Ok(resp) => {
-                if !resp.status().is_success() {
-                    return Err(anyhow!("Semantic Scholar API error: {}", resp.status()));
-                }
-                Self::parse_response(&resp.text().await?)
-            }
-            Err(e) => Err(anyhow!("Request failed: {}", e)),
-        }
+        Self::parse_response(&fetch("Semantic Scholar", request, &self.limiter).await?)
     }
 
     pub fn build_url(base_url: &str, query_params: &DiscoveryQuery) -> String {
@@ -111,6 +154,9 @@ impl SemanticScholarClient {
             query.push_str(cat);
             query.push(' ');
         }
+        if let Some(topic) = &query_params.topic {
+            query.push_str(topic);
+        }
         
         format!("{}/graph/v1/paper/search?query={}&fields=title,authors,year,venue,abstract,externalIds,isOpenAccess,openAccessPdf&limit={}", base_url, urlencoding::encode(query.trim()), query_params.limit)
     }
@@ -118,7 +164,8 @@ impl SemanticScholarClient {
     /// Parse a successful `/paper/search` response body. Pure, so it can be fixture-tested.
     pub fn parse_response(body: &str) -> Result<Vec<PaperMetadata>> {
         let results: SSResult = serde_json::from_str(body)?;
-        Ok(results.data.into_iter().map(|p| PaperMetadata {
+        Ok(results.data.into_iter().map(|p| identity::canonicalize(PaperMetadata {
+            id: String::new(),
             title: p.title,
             authors: p.authors.into_iter().map(|a| a.name).collect(),
             year: p.year,
@@ -131,7 +178,8 @@ impl SemanticScholarClient {
             pdf_url: p.open_access_pdf.map(|pdf| pdf.url),
             is_oa: p.is_open_access.unwrap_or(false),
             categories: Vec::new(),
-        }).collect())
+            sources: vec!["semantic_scholar".to_string()],
+        })).collect())
     }
 }
 
@@ -141,27 +189,23 @@ use quick_xml::reader::Reader;
 pub struct ArxivClient {
     pub base_url: String,
     client: Client,
+    limiter: Limiter,
 }
 
 impl ArxivClient {
     pub fn new() -> Self {
-        Self { base_url: "http://export.arxiv.org".to_string(), client: Client::new() }
+        // arXiv API terms: no more than one request every 3 seconds.
+        Self {
+            base_url: "http://export.arxiv.org".to_string(),
+            client: http_client(),
+            limiter: RateLimiter::direct(Quota::with_period(Duration::from_secs(3)).unwrap()),
+        }
     }
 
     pub async fn search(&self, query_params: &DiscoveryQuery) -> Result<Vec<PaperMetadata>> {
         let url = Self::build_url(&self.base_url, query_params);
         tracing::info!("Querying arXiv: {}", url);
-
-        match self.client.get(&url).send().await {
-            Ok(resp) => {
-                if !resp.status().is_success() {
-                    return Err(anyhow!("arXiv API error: {}", resp.status()));
-                }
-                let text = resp.text().await?;
-                Ok(Self::parse_feed(&text))
-            }
-            Err(e) => Err(anyhow!("Request failed: {}", e)),
-        }
+        Ok(Self::parse_feed(&fetch("arXiv", self.client.get(&url), &self.limiter).await?))
     }
 
     pub fn build_url(base_url: &str, query_params: &DiscoveryQuery) -> String {
@@ -182,6 +226,12 @@ impl ArxivClient {
         if let Some(uni) = &query_params.university {
             if !query.is_empty() { query.push_str(" AND "); }
             query.push_str(&format!("all:\"{}\"", uni));
+        }
+        if let Some(topic) = &query_params.topic {
+            for word in topic.split_whitespace().map(|w| w.replace('"', "")).filter(|w| !w.is_empty()) {
+                if !query.is_empty() { query.push_str(" AND "); }
+                query.push_str(&format!("all:{}", word));
+            }
         }
 
         format!("{}/api/query?search_query={}&start=0&max_results={}", base_url, urlencoding::encode(&query), query_params.limit)
@@ -303,7 +353,8 @@ impl ArxivClient {
                                 .find(|(_, t, ty)| t == "pdf" || ty == "application/pdf")
                                 .map(|(h, _, _)| h.clone());
 
-                            papers.push(PaperMetadata {
+                            papers.push(identity::canonicalize(PaperMetadata {
+                                id: String::new(),
                                 title: title.replace('\n', " ").trim().to_string(),
                                 authors: authors.iter().map(|a| a.trim().to_string()).collect(),
                                 year,
@@ -319,7 +370,8 @@ impl ArxivClient {
                                 }),
                                 is_oa: true,
                                 categories: Vec::new(),
-                            });
+                                sources: vec!["arxiv".to_string()],
+                            }));
                         },
                         _ => state = TagState::None,
                     }
@@ -384,14 +436,16 @@ pub struct OpenAlexClient {
     pub base_url: String,
     client: Client,
     email: Option<String>,
+    limiter: Limiter,
 }
 
 impl OpenAlexClient {
     pub fn new(email: Option<String>) -> Self {
         Self {
             base_url: "https://api.openalex.org".to_string(),
-            client: Client::new(),
+            client: http_client(),
             email,
+            limiter: RateLimiter::direct(Quota::per_second(nonzero!(10u32))),
         }
     }
 
@@ -399,15 +453,7 @@ impl OpenAlexClient {
         let url = Self::build_url(&self.base_url, query_params, self.email.as_deref());
 
         tracing::info!("Querying OpenAlex: {}", url);
-        match self.client.get(&url).send().await {
-            Ok(resp) => {
-                if !resp.status().is_success() {
-                    return Err(anyhow!("OpenAlex API error: {}", resp.status()));
-                }
-                Self::parse_response(&resp.text().await?)
-            }
-            Err(e) => Err(anyhow!("Request failed: {}", e)),
-        }
+        Self::parse_response(&fetch("OpenAlex", self.client.get(&url), &self.limiter).await?)
     }
 
     pub fn build_url(base_url: &str, query_params: &DiscoveryQuery, email: Option<&str>) -> String {
@@ -431,6 +477,9 @@ impl OpenAlexClient {
         }
         if let Some(cat) = &query_params.category {
              search_parts.push(cat.clone());
+        }
+        if let Some(topic) = &query_params.topic {
+             search_parts.push(topic.clone());
         }
 
         if !filters.is_empty() {
@@ -478,7 +527,8 @@ impl OpenAlexClient {
 
         Ok(oa_resp.results.into_iter().map(|work| {
             let authors = work.authorships.into_iter().map(|a| a.author.display_name).collect();
-            PaperMetadata {
+            identity::canonicalize(PaperMetadata {
+                id: String::new(),
                 title: work.title.unwrap_or_else(|| "Untitled".to_string()),
                 authors,
                 year: work.publication_year,
@@ -499,7 +549,8 @@ impl OpenAlexClient {
                 pdf_url: work.best_oa_location.as_ref().and_then(|loc| loc.pdf_url.clone()),
                 is_oa: work.best_oa_location.map(|loc| loc.is_oa).unwrap_or(false),
                 categories: Vec::new(),
-            }
+                sources: vec!["openalex".to_string()],
+            })
         }).collect())
     }
 }
@@ -519,30 +570,49 @@ impl DiscoveryOrchestrator {
         }
     }
 
-    pub async fn search_all(&self, query: &DiscoveryQuery) -> Vec<PaperMetadata> {
-        let ss_fut = self.ss_client.search(query);
-        let arxiv_fut = self.arxiv_client.search(query);
-        let oa_fut = self.open_alex_client.search(query);
-
-        let (ss_res, arxiv_res, oa_res) = tokio::join!(ss_fut, arxiv_fut, oa_fut);
+    /// Queries all sources concurrently. Returns deduplicated papers and one status per source.
+    pub async fn search_all(&self, query: &DiscoveryQuery) -> (Vec<PaperMetadata>, Vec<SourceStatus>) {
+        let (ss, arxiv, oa) = tokio::join!(
+            timed("semantic_scholar", self.ss_client.search(query)),
+            timed("arxiv", self.arxiv_client.search(query)),
+            timed("openalex", self.open_alex_client.search(query)),
+        );
 
         let mut all_results = Vec::new();
-
-        match ss_res {
-            Ok(results) => all_results.extend(results),
-            Err(e) => tracing::warn!("Semantic Scholar discovery failed: {}", e),
+        let mut statuses = Vec::new();
+        for (papers, status) in [ss, arxiv, oa] {
+            all_results.extend(papers);
+            statuses.push(status);
         }
+        (identity::dedupe(all_results), statuses)
+    }
 
-        match arxiv_res {
-            Ok(results) => all_results.extend(results),
-            Err(e) => tracing::warn!("arXiv discovery failed: {}", e),
+    /// Search, then filter by title distance when a title is given, sorted closest first.
+    pub async fn discover(&self, query: &DiscoveryQuery, threshold: usize) -> LiteratureResult {
+        let (papers, source_statuses) = self.search_all(query).await;
+        let matches = Resolver::resolve(query.title.as_deref().unwrap_or(""), papers, threshold);
+        LiteratureResult {
+            schema_version: SCHEMA_VERSION,
+            papers: Resolver::sort_by_similarity(matches).into_iter().map(|(p, _)| p).collect(),
+            source_statuses,
+            downloads: Vec::new(),
         }
+    }
+}
 
-        match oa_res {
-            Ok(results) => all_results.extend(results),
-            Err(e) => tracing::warn!("OpenAlex discovery failed: {}", e),
+async fn timed(source: &str, fut: impl std::future::Future<Output = Result<Vec<PaperMetadata>>>) -> (Vec<PaperMetadata>, SourceStatus) {
+    let started = Instant::now();
+    let result = fut.await;
+    let latency_ms = started.elapsed().as_millis() as u64;
+    match result {
+        Ok(papers) => {
+            let status = SourceStatus { source: source.to_string(), ok: true, result_count: papers.len(), latency_ms, http_status: None, error: None };
+            (papers, status)
         }
-
-        all_results
+        Err(e) => {
+            tracing::warn!("{} discovery failed: {}", source, e);
+            let http_status = e.downcast_ref::<HttpError>().map(|h| h.status);
+            (Vec::new(), SourceStatus { source: source.to_string(), ok: false, result_count: 0, latency_ms, http_status, error: Some(e.to_string()) })
+        }
     }
 }
