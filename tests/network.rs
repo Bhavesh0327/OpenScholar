@@ -18,6 +18,12 @@ async fn serve(server: &MockServer, route: &str, status: u16, body: String) {
         .await;
 }
 
+fn local_downloader(dir: impl Into<std::path::PathBuf>) -> Downloader {
+    let mut d = Downloader::new(dir);
+    d.allow_private_hosts = true;
+    d
+}
+
 fn oa_paper(pdf_url: String) -> PaperMetadata {
     let mut p = bare_paper();
     p.title = "Attention Is All You Need".into();
@@ -52,12 +58,12 @@ async fn semantic_scholar_sends_key_and_parses_success() {
 }
 
 #[tokio::test]
-async fn semantic_scholar_429_is_an_error_and_not_retried() {
+async fn semantic_scholar_429_gives_up_after_three_attempts() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/graph/v1/paper/search"))
-        .respond_with(ResponseTemplate::new(429).set_body_string(fixture("semantic_scholar_429.json")))
-        .expect(1)
+        .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "0").set_body_string(fixture("semantic_scholar_429.json")))
+        .expect(3)
         .mount(&server)
         .await;
 
@@ -68,7 +74,6 @@ async fn semantic_scholar_429_is_an_error_and_not_retried() {
 }
 
 #[tokio::test]
-#[ignore = "GAP-10: no retry/backoff on 429"]
 async fn semantic_scholar_retries_after_429() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
@@ -96,7 +101,7 @@ async fn semantic_scholar_malformed_body_is_an_error() {
 // ---------- arXiv / OpenAlex ----------
 
 #[tokio::test]
-async fn arxiv_parses_success_and_errors_on_503() {
+async fn arxiv_parses_success_and_errors_on_400() {
     let server = MockServer::start().await;
     serve(&server, "/api/query", 200, fixture("arxiv_attention.xml")).await;
     let mut client = ArxivClient::new();
@@ -104,7 +109,7 @@ async fn arxiv_parses_success_and_errors_on_503() {
     assert_eq!(client.search(&query(Some("attention"), None, None, None)).await.unwrap().len(), 2);
 
     let down = MockServer::start().await;
-    serve(&down, "/api/query", 503, String::new()).await;
+    serve(&down, "/api/query", 400, String::new()).await;
     client.base_url = down.uri();
     assert!(client.search(&query(Some("attention"), None, None, None)).await.is_err());
 }
@@ -130,9 +135,9 @@ async fn openalex_sends_mailto_and_parses_success() {
 // ---------- orchestrator ----------
 
 #[tokio::test]
-async fn search_all_drops_failed_source_and_keeps_duplicates() {
+async fn search_all_drops_failed_source_and_merges_duplicates() {
     let server = MockServer::start().await;
-    serve(&server, "/graph/v1/paper/search", 429, fixture("semantic_scholar_429.json")).await;
+    serve(&server, "/graph/v1/paper/search", 403, String::new()).await;
     serve(&server, "/api/query", 200, fixture("arxiv_attention.xml")).await;
     serve(&server, "/works", 200, fixture("openalex_attention.json")).await;
 
@@ -141,10 +146,13 @@ async fn search_all_drops_failed_source_and_keeps_duplicates() {
     orch.arxiv_client.base_url = server.uri();
     orch.open_alex_client.base_url = server.uri();
 
-    let papers = orch.search_all(&query(Some("attention"), None, None, None)).await;
-    // Baseline: SS failure is silent (GAP-11) and the same paper from arXiv + OpenAlex is not merged (GAP-04).
-    assert_eq!(papers.len(), 3);
-    assert_eq!(papers.iter().filter(|p| p.title == "Attention Is All You Need").count(), 2);
+    let (papers, statuses) = orch.search_all(&query(Some("attention"), None, None, None)).await;
+    let summary: Vec<_> = statuses.iter().map(|s| (s.source.as_str(), s.ok, s.result_count, s.http_status)).collect();
+    assert_eq!(summary, vec![("semantic_scholar", false, 0, Some(403)), ("arxiv", true, 2, None), ("openalex", true, 1, None)]);
+    assert_eq!(papers.len(), 2);
+    let merged = papers.iter().find(|p| p.id == "doi:10.48550/arxiv.1706.03762").unwrap();
+    assert_eq!(merged.sources, vec!["arxiv", "openalex"]);
+    assert_eq!(merged.open_alex_id.as_deref(), Some("W2626778328"));
 }
 
 // ---------- download ----------
@@ -154,7 +162,7 @@ async fn download_writes_pdf_metadata_and_manifest() {
     let server = MockServer::start().await;
     serve(&server, "/paper.pdf", 200, "%PDF-1.4 test".into()).await;
     let dir = temp_dir("dl-ok");
-    let downloader = Downloader::new(&dir);
+    let downloader = local_downloader(&dir);
     let paper = oa_paper(format!("{}/paper.pdf", server.uri()));
 
     let target = downloader.download_paper(&paper).await.unwrap();
@@ -175,7 +183,7 @@ async fn download_http_error_creates_nothing() {
     serve(&server, "/missing.pdf", 404, String::new()).await;
     let dir = temp_dir("dl-404");
 
-    let result = Downloader::new(&dir).download_paper(&oa_paper(format!("{}/missing.pdf", server.uri()))).await;
+    let result = local_downloader(&dir).download_paper(&oa_paper(format!("{}/missing.pdf", server.uri()))).await;
     assert!(result.is_err());
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
 }
@@ -187,11 +195,10 @@ async fn download_refuses_closed_access_without_request() {
     let mut paper = oa_paper(format!("{}/paper.pdf", server.uri()));
     paper.is_oa = false;
 
-    assert!(Downloader::new(temp_dir("dl-closed")).download_paper(&paper).await.is_err());
+    assert!(local_downloader(temp_dir("dl-closed")).download_paper(&paper).await.is_err());
 }
 
 #[tokio::test]
-#[ignore = "GAP-12: non-PDF responses are saved as paper.pdf"]
 async fn download_rejects_html_masquerading_as_pdf() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
@@ -200,23 +207,43 @@ async fn download_rejects_html_masquerading_as_pdf() {
         .await;
     let dir = temp_dir("dl-html");
 
-    assert!(Downloader::new(&dir).download_paper(&oa_paper(format!("{}/paper.pdf", server.uri()))).await.is_err());
+    assert!(local_downloader(&dir).download_paper(&oa_paper(format!("{}/paper.pdf", server.uri()))).await.is_err());
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
 }
 
 #[tokio::test]
-#[ignore = "GAP-13: a corrupt manifest.json is silently replaced, losing its entries"]
 async fn download_preserves_corrupt_manifest() {
     let server = MockServer::start().await;
     serve(&server, "/paper.pdf", 200, "%PDF-1.4".into()).await;
     let dir = temp_dir("dl-corrupt");
     std::fs::write(dir.join("manifest.json"), "[{\"title\": truncated").unwrap();
 
-    let _ = Downloader::new(&dir).download_paper(&oa_paper(format!("{}/paper.pdf", server.uri()))).await;
+    let _ = local_downloader(&dir).download_paper(&oa_paper(format!("{}/paper.pdf", server.uri()))).await;
     let kept = std::fs::read_dir(&dir).unwrap().flatten().any(|e| {
         std::fs::read_to_string(e.path()).map(|c| c.contains("truncated")).unwrap_or(false)
     });
     assert!(kept, "original manifest content must survive somewhere");
+}
+
+#[tokio::test]
+async fn download_refuses_local_hosts_by_default() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET")).respond_with(ResponseTemplate::new(200)).expect(0).mount(&server).await;
+
+    let err = Downloader::new(temp_dir("dl-ssrf")).download_paper(&oa_paper(format!("{}/paper.pdf", server.uri()))).await.unwrap_err();
+    assert!(err.to_string().contains("private or local host"), "{err}");
+}
+
+#[tokio::test]
+async fn download_enforces_size_cap_and_leaves_no_files() {
+    let server = MockServer::start().await;
+    serve(&server, "/big.pdf", 200, format!("%PDF-{}", "x".repeat(2048))).await;
+    let dir = temp_dir("dl-big");
+    let mut downloader = local_downloader(&dir);
+    downloader.max_bytes = 1024;
+
+    assert!(downloader.download_paper(&oa_paper(format!("{}/big.pdf", server.uri()))).await.is_err());
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
 }
 
 #[tokio::test]
