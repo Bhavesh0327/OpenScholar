@@ -12,6 +12,7 @@ fn q(title: Option<&str>, author: Option<&str>, university: Option<&str>) -> Dis
         author: author.map(String::from),
         university: university.map(String::from),
         category: None,
+        topic: None,
         limit: 10,
     }
 }
