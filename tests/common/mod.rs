@@ -13,12 +13,14 @@ pub fn query(title: Option<&str>, author: Option<&str>, university: Option<&str>
         author: author.map(String::from),
         university: university.map(String::from),
         category: category.map(String::from),
+        topic: None,
         limit: 10,
     }
 }
 
 pub fn bare_paper() -> PaperMetadata {
     PaperMetadata {
+        id: String::new(),
         title: "T".into(),
         authors: vec![],
         year: None,
@@ -31,6 +33,7 @@ pub fn bare_paper() -> PaperMetadata {
         pdf_url: None,
         is_oa: false,
         categories: vec![],
+        sources: vec![],
     }
 }
 
