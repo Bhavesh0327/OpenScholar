@@ -28,13 +28,6 @@ fn arxiv_parses_recorded_feed() {
 }
 
 #[test]
-fn arxiv_id_is_currently_the_full_abs_url() {
-    // Baseline: arxiv_id holds the Atom <id> verbatim (URL + version), not "1706.03762".
-    let papers = ArxivClient::parse_feed(&fixture("arxiv_attention.xml"));
-    assert_eq!(papers[0].arxiv_id.as_deref(), Some("http://arxiv.org/abs/1706.03762v7"));
-}
-
-#[test]
 fn arxiv_malformed_feed_returns_partial_results_without_error() {
     let papers = ArxivClient::parse_feed("<feed><entry><title>Only</title></entry><entry><title>Bro");
     assert_eq!(papers.len(), 1);
@@ -54,14 +47,15 @@ fn arxiv_entities_keep_surrounding_spaces_and_numeric_refs() {
     let p = &ArxivClient::parse_feed(feed)[0];
     assert_eq!(p.title, "Q & A & <more> &unknown;");
     assert_eq!(p.authors, vec!["Ann \u{e9}l", "Bob"]);
-    assert_eq!(p.arxiv_id.as_deref(), Some("http://arxiv.org/abs/1v1"));
+    assert_eq!(p.arxiv_id.as_deref(), Some("1"));
 }
 
 #[test]
-#[ignore = "GAP-04: arXiv IDs are not canonicalized"]
 fn arxiv_id_is_canonical() {
     let papers = ArxivClient::parse_feed(&fixture("arxiv_attention.xml"));
     assert_eq!(papers[0].arxiv_id.as_deref(), Some("1706.03762"));
+    assert_eq!(papers[0].id, "arxiv:1706.03762");
+    assert_eq!(papers[0].sources, vec!["arxiv"]);
 }
 
 #[test]
@@ -80,7 +74,7 @@ fn semantic_scholar_parses_search_response() {
 
     let p = &papers[0];
     assert_eq!(p.title, "Attention is All you Need");
-    assert_eq!(p.doi.as_deref(), Some("10.48550/arXiv.1706.03762"));
+    assert_eq!(p.doi.as_deref(), Some("10.48550/arxiv.1706.03762"));
     assert_eq!(p.arxiv_id.as_deref(), Some("1706.03762"));
     assert_eq!(p.semantic_scholar_id.as_deref(), Some("204e3073870fae3d05bcbc2f6a8e263d9b72e776"));
     assert_eq!(p.pdf_url.as_deref(), Some("https://arxiv.org/pdf/1706.03762"));
@@ -125,8 +119,9 @@ fn openalex_parses_recorded_works() {
     let p = &papers[0];
     assert_eq!(p.title, "Attention Is All You Need");
     assert_eq!(p.year, Some(2017));
-    assert_eq!(p.open_alex_id.as_deref(), Some("https://openalex.org/W2626778328"));
-    assert_eq!(p.doi.as_deref(), Some("https://doi.org/10.48550/arxiv.1706.03762"));
+    assert_eq!(p.open_alex_id.as_deref(), Some("W2626778328"));
+    assert_eq!(p.doi.as_deref(), Some("10.48550/arxiv.1706.03762"));
+    assert_eq!(p.arxiv_id.as_deref(), Some("1706.03762"), "derived from the arXiv DOI");
     assert_eq!(p.pdf_url.as_deref(), Some("https://arxiv.org/pdf/1706.03762"));
     assert!(p.is_oa);
     assert_eq!(p.authors.len(), 8);
@@ -157,10 +152,21 @@ fn openalex_url_uses_affiliation_filter_and_search() {
     );
 }
 
+// ---------- topic mode ----------
+
+#[test]
+fn topic_is_sent_as_free_text_and_arxiv_and_of_words() {
+    let mut q = query(None, None, None, None);
+    q.topic = Some("retrieval augmented generation".into());
+
+    assert!(ArxivClient::build_url("http://a", &q).contains(&*urlencoding::encode("all:retrieval AND all:augmented AND all:generation")));
+    assert!(SemanticScholarClient::build_url("http://s", &q).contains("query=retrieval%20augmented%20generation&"));
+    assert!(OpenAlexClient::build_url("http://o", &q, None).contains("search=retrieval%20augmented%20generation&"));
+}
+
 // ---------- cross-provider identity ----------
 
 #[test]
-#[ignore = "GAP-04: DOIs are not normalized across providers, so the same paper cannot be deduplicated"]
 fn same_paper_has_same_doi_across_providers() {
     let ss = SemanticScholarClient::parse_response(&fixture("semantic_scholar_search.json")).unwrap();
     let oa = OpenAlexClient::parse_response(&fixture("openalex_attention.json")).unwrap();
@@ -168,16 +174,14 @@ fn same_paper_has_same_doi_across_providers() {
 }
 
 #[test]
-fn storage_id_baseline_differs_for_same_paper_across_providers() {
-    // Baseline: the same paper from SS and OpenAlex lands in two different download dirs.
+fn storage_id_matches_for_same_paper_across_providers() {
     let ss = SemanticScholarClient::parse_response(&fixture("semantic_scholar_search.json")).unwrap();
     let oa = OpenAlexClient::parse_response(&fixture("openalex_attention.json")).unwrap();
-    assert_eq!(Downloader::storage_id(&ss[0]), "10.48550_arXiv.1706.03762");
-    assert_eq!(Downloader::storage_id(&oa[0]), "doi.org_10.48550_arxiv.1706.03762");
+    assert_eq!(Downloader::storage_id(&ss[0]), "10.48550_arxiv.1706.03762");
+    assert_eq!(Downloader::storage_id(&oa[0]), Downloader::storage_id(&ss[0]));
 }
 
 #[test]
-#[ignore = "GAP-05: papers with no DOI/arXiv/S2 ID all share the `unknown_id` directory"]
 fn storage_id_is_unique_for_openalex_only_papers() {
     let mut a = bare_paper();
     a.open_alex_id = Some("https://openalex.org/W1".into());
