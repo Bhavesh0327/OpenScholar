@@ -17,6 +17,7 @@ mod tests {
 
     fn create_paper(is_oa: bool) -> PaperMetadata {
          PaperMetadata {
+            id: String::new(),
             title: "Test".to_string(),
             authors: vec![],
             year: None,
@@ -29,6 +30,7 @@ mod tests {
             pdf_url: None,
             is_oa,
             categories: vec![],
+            sources: vec![],
         }
     }
 
