@@ -38,16 +38,7 @@ impl Downloader {
         let pdf_url = paper.pdf_url.as_ref()
             .ok_or_else(|| anyhow!("No PDF URL found for paper despite OA status."))?;
 
-        let raw_id = paper.doi.as_ref()
-            .or(paper.arxiv_id.as_ref())
-            .or(paper.semantic_scholar_id.as_ref())
-            .map(|s| s.as_str())
-            .unwrap_or("unknown_id");
-
-        // Sanitize ID: remove scheme, replace non-alphanumeric chars
-        let paper_id = raw_id.replace("http://", "")
-                             .replace("https://", "")
-                             .replace(|c: char| !c.is_alphanumeric() && c != '.' && c != '-', "_");
+        let paper_id = Self::storage_id(paper);
 
         // Download PDF
         tracing::info!("Downloading PDF from: {}", pdf_url);
@@ -68,18 +59,32 @@ impl Downloader {
         while let Some(chunk) = response.chunk().await? {
             file.write_all(&chunk).await?;
         }
+        file.flush().await?;
 
         // Save Metadata
         let metadata_path = target_dir.join("metadata.json");
         tracing::info!("Saving metadata to: {:?}", metadata_path);
         let metadata_json = serde_json::to_string_pretty(paper)?;
-        let mut meta_file = File::create(&metadata_path).await?;
-        meta_file.write_all(metadata_json.as_bytes()).await?;
+        fs::write(&metadata_path, metadata_json).await?;
 
         // Update Manifest
         self.update_manifest(paper, &paper_id, &pdf_path).await?;
 
         Ok(target_dir)
+    }
+
+    /// Directory name a paper is stored under: first of DOI / arXiv / Semantic Scholar ID, sanitized.
+    pub fn storage_id(paper: &PaperMetadata) -> String {
+        let raw_id = paper.doi.as_ref()
+            .or(paper.arxiv_id.as_ref())
+            .or(paper.semantic_scholar_id.as_ref())
+            .map(|s| s.as_str())
+            .unwrap_or("unknown_id");
+
+        // Sanitize ID: remove scheme, replace non-alphanumeric chars
+        raw_id.replace("http://", "")
+              .replace("https://", "")
+              .replace(|c: char| !c.is_alphanumeric() && c != '.' && c != '-', "_")
     }
 
     async fn update_manifest(&self, paper: &PaperMetadata, id: &str, pdf_path: &std::path::Path) -> Result<()> {
@@ -113,8 +118,7 @@ impl Downloader {
         entries.push(new_entry);
 
         let json = serde_json::to_string_pretty(&entries)?;
-        let mut file = File::create(&manifest_path).await?;
-        file.write_all(json.as_bytes()).await?;
+        fs::write(&manifest_path, json).await?;
         tracing::info!("Updated manifest at: {:?}", manifest_path);
 
         Ok(())
@@ -188,8 +192,7 @@ impl Downloader {
         }
 
         let json = serde_json::to_string_pretty(&root)?;
-        let mut file = File::create(&path).await?;
-        file.write_all(json.as_bytes()).await?;
+        fs::write(&path, json).await?;
         tracing::info!("Saved {} unavailable papers to unavailable.json", papers.len());
 
         Ok(())

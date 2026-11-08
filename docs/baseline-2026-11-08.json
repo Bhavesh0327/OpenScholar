@@ -1,0 +1,212 @@
+{
+  "recorded_at": "2026-11-08T13:24:17.424015+00:00",
+  "runs": [
+    {
+      "error": "Semantic Scholar API error: 429 Too Many Requests",
+      "latency_ms": 1089,
+      "ok": false,
+      "query": "exact_title",
+      "source": "semantic_scholar"
+    },
+    {
+      "count": 10,
+      "latency_ms": 1114,
+      "ok": true,
+      "query": "exact_title",
+      "source": "arxiv",
+      "titles": [
+        "attention is all you need",
+        "not all attention is all you need",
+        "element-wise attention is all you need",
+        "tensor product attention is all you need",
+        "attention is all you need in speech separation",
+        "some attention is all you need for retrieval",
+        "attention is all you need to solve chiral superconductivity",
+        "forget attention: importance-aware attention is all you need",
+        "transmla: multi-head latent attention is all you need",
+        "attention is all you need until you need retention"
+      ],
+      "with_abstract": 10,
+      "with_pdf": 10
+    },
+    {
+      "count": 10,
+      "latency_ms": 4748,
+      "ok": true,
+      "query": "exact_title",
+      "source": "openalex",
+      "titles": [
+        "attention is all you need",
+        "attention is all you need in speech separation",
+        "channel attention is all you need for video frame interpolation",
+        "attention is all you need: utilizing attention in ai-enabled drug discovery",
+        "attention is all you need",
+        "attention is all you need",
+        "not all attention is all you need",
+        "moral attention is all you need",
+        "cross-attention is all you need: adapting pretrained transformers for machine translation",
+        "attention is all you need for chinese word segmentation"
+      ],
+      "with_abstract": 10,
+      "with_pdf": 7
+    },
+    {
+      "count": 20,
+      "duplicate_titles": 5,
+      "query": "exact_title",
+      "source": "combined"
+    },
+    {
+      "error": "Semantic Scholar API error: 429 Too Many Requests",
+      "latency_ms": 844,
+      "ok": false,
+      "query": "topic",
+      "source": "semantic_scholar"
+    },
+    {
+      "count": 8,
+      "latency_ms": 513,
+      "ok": true,
+      "query": "topic",
+      "source": "arxiv",
+      "titles": [
+        "retrieval augmented generation evaluation for health documents",
+        "lrage: legal retrieval augmented generation evaluation tool",
+        "rage: a retrieval-augmented generation evaluation framework",
+        "mirage: a metric-intensive benchmark for retrieval-augmented generation evaluation",
+        "mode-rag: manifold outlier diagnosis and energy-based retrieval-augmented generation evaluation",
+        "do llm attribution metrics transfer? auditing retrieval-augmented generation evaluation across datasets and constructs",
+        "retrieval augmented generation evaluation in the era of large language models: a comprehensive survey",
+        "towards more robust retrieval-augmented generation: evaluating rag under adversarial poisoning attacks"
+      ],
+      "with_abstract": 8,
+      "with_pdf": 8
+    },
+    {
+      "count": 10,
+      "latency_ms": 2026,
+      "ok": true,
+      "query": "topic",
+      "source": "openalex",
+      "titles": [
+        "retrieval augmented generation evaluation for health documents",
+        "lrage: legal retrieval augmented generation evaluation tool",
+        "rage: a retrieval-augmented generation evaluation framework",
+        "multimodal retrieval augmented generation evaluation benchmark",
+        "mirage: a metric-intensive benchmark for retrieval-augmented generation evaluation",
+        "towards more robust retrieval-augmented generation: evaluating rag under adversarial poisoning attacks",
+        "translation guided retrieval-augmented generation evaluation for turkish medical question answering",
+        "athena: an external reasoning engine for retrieval-augmented generation — evaluation harness and results",
+        "mode-rag: manifold outlier diagnosis and energy-based retrieval-augmented generation evaluation",
+        "evaluating retrieval quality in retrieval-augmented generation"
+      ],
+      "with_abstract": 10,
+      "with_pdf": 5
+    },
+    {
+      "count": 18,
+      "duplicate_titles": 6,
+      "query": "topic",
+      "source": "combined"
+    },
+    {
+      "error": "Semantic Scholar API error: 429 Too Many Requests",
+      "latency_ms": 815,
+      "ok": false,
+      "query": "author",
+      "source": "semantic_scholar"
+    },
+    {
+      "count": 10,
+      "latency_ms": 699,
+      "ok": true,
+      "query": "author",
+      "source": "arxiv",
+      "titles": [
+        "deep graph infomax",
+        "combined reinforcement learning via abstract representations",
+        "on the learning dynamics of deep neural networks",
+        "generative augmented flow networks",
+        "pre-training and fine-tuning generative flow networks",
+        "ai for global climate cooperation: modeling global climate negotiations, agreements, and long-term cooperation in rice-n",
+        "stochastic generative flow networks",
+        "towards scaling difference target propagation by learning backprop targets",
+        "multi-domain balanced sampling improves out-of-distribution generalization of chest x-ray pathology prediction models",
+        "fl games: a federated learning framework for distribution shifts"
+      ],
+      "with_abstract": 10,
+      "with_pdf": 10
+    },
+    {
+      "count": 10,
+      "latency_ms": 2227,
+      "ok": true,
+      "query": "author",
+      "source": "openalex",
+      "titles": [
+        "ian goodfellow, yoshua bengio, and aaron courville: deep learning",
+        "deep learning by ian goodfellow, yoshua bengio & aar computers",
+        "plénière. intelligence artificielle : faut-il craindre le pire ? avec yoshua bengio",
+        "from pioneer to alarm-raiser: a critical analysis of yoshua bengio's framework for ai existential risks, alignment failures, and governance imperatives",
+        "iaeng transactions on artificial intelligence in honour of laureates yoshua bengio, eduard hovy and geoffrey mclachlan",
+        "response to the march 2023 'pause giant ai experiments: an open letter' by yoshua bengio, signed by stuart russell, elon musk, steve wozniak, yuval noah harari and others…",
+        "on using very large target vocabulary for neural machine translation",
+        "towards an automatic turing test: learning to evaluate dialogue responses",
+        "hotpotqa: a dataset for diverse, explainable multi-hop question answering",
+        "learning phrase representations using rnn encoder–decoder for statistical machine translation"
+      ],
+      "with_abstract": 5,
+      "with_pdf": 6
+    },
+    {
+      "count": 20,
+      "duplicate_titles": 0,
+      "query": "author",
+      "source": "combined"
+    },
+    {
+      "error": "Semantic Scholar API error: 429 Too Many Requests",
+      "latency_ms": 816,
+      "ok": false,
+      "query": "university",
+      "source": "semantic_scholar"
+    },
+    {
+      "count": 0,
+      "latency_ms": 459,
+      "ok": true,
+      "query": "university",
+      "source": "arxiv",
+      "titles": [],
+      "with_abstract": 0,
+      "with_pdf": 0
+    },
+    {
+      "count": 10,
+      "latency_ms": 2817,
+      "ok": true,
+      "query": "university",
+      "source": "openalex",
+      "titles": [
+        "position-aware graph neural networks",
+        "strategies for pre-training graph neural networks",
+        "gnnexplainer: generating explanations for graph neural networks",
+        "identity-aware graph neural networks",
+        "gnnexplainer: generating explanations for graph neural networks.",
+        "design space for graph neural networks",
+        "multi-hop attention graph neural networks",
+        "weisfeiler and leman go neural: higher-order graph neural networks",
+        "redundancy-free computation for graph neural networks",
+        "weisfeiler and leman go neural: higher-order graph neural networks"
+      ],
+      "with_abstract": 10,
+      "with_pdf": 7
+    },
+    {
+      "count": 10,
+      "duplicate_titles": 1,
+      "query": "university",
+      "source": "combined"
+    }
+  ]
+}

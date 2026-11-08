@@ -1,0 +1,100 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/hyhh5SXkZqqcPjlpAIf+HHvlG/E</id>
+  <title>arXiv Query: search_query=all:"R&amp;D"&amp;id_list=&amp;start=0&amp;max_results=3</title>
+  <updated>2026-11-07T20:46:30Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:%22R%26D%22&amp;start=0&amp;max_results=3&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>3</opensearch:itemsPerPage>
+  <opensearch:totalResults>12475</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/1109.5944v1</id>
+    <title>Recent progress of the ATLAS Planar Pixel Sensor R&amp;D Project</title>
+    <updated>2011-09-27T15:49:53Z</updated>
+    <link href="https://arxiv.org/abs/1109.5944v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1109.5944v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The foreseen luminosity upgrade for the LHC (a factor of 5-10 more in peak luminosity by 2021) poses serious constraints on the technology for the ATLAS tracker in this High Luminosity era (HL-LHC). In fact, such luminosity increase leads to increased occupancy and radiation damage of the tracking detectors.
+  To investigate the suitability of pixel sensors using the proven planar technology for the upgraded tracker, the ATLAS Planar Pixel Sensor R&amp;D Project was established comprising 17 institutes and more than 80 scientists. Main areas of research are the performance of planar pixel sensors at highest fluences, the exploration of possibilities for cost reduction to enable the instrumentation of large areas, the achievement of slim or active edge designs to provide low geometric inefficiencies without the need for shingling of modules and the investigation of the operation of highly irradiated sensors at low thresholds to increase the efficiency.
+  In the following I will present results from the group, concerning mainly irradiated-devices performance, together with studies for new sensors, including detailed simulations.</summary>
+    <category term="physics.ins-det" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="hep-ex" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2011-09-27T15:49:53Z</published>
+    <arxiv:comment>9 pages,12 figures</arxiv:comment>
+    <arxiv:primary_category term="physics.ins-det"/>
+    <author>
+      <name>The ATLAS Planar Pixel Sensor R&amp;D Project</name>
+    </author>
+    <author>
+      <name> :</name>
+    </author>
+    <author>
+      <name>M. Bomben</name>
+    </author>
+    <arxiv:doi>10.1016/j.phpro.2012.02.436</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1016/j.phpro.2012.02.436" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1707.09509v2</id>
+    <title>$R(D^*)$, $|V_{cb}|$, and the Heavy Quark Symmetry relations between form factors</title>
+    <updated>2017-10-22T13:34:34Z</updated>
+    <link href="https://arxiv.org/abs/1707.09509v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1707.09509v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Stringent relations between the $B^{(*)} \to D^{(*)} $ form factors exist in the heavy quark limit and the leading symmetry breaking corrections are known. We reconsider their uncertainty and role in the analysis of recent Belle data for $B\to D^{(*)}\ellν$ with model-independent parametrizations and in the related prediction of $R(D^{(*)})$. We find $|V_{cb}|=41.5(1.3) \ 10^{-3}$ and $|V_{cb}|=40.6(^{+1.2}_{-1.3}) \ 10^{-3}$ using input from Light Cone Sum Rules, and $R(D^{*})=0.260(8)$.</summary>
+    <category term="hep-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2017-07-29T12:53:55Z</published>
+    <arxiv:comment>13 pages. Improved discussion of R(D*), P_tau prediction and various explanations added</arxiv:comment>
+    <arxiv:primary_category term="hep-ph"/>
+    <author>
+      <name>Dante Bigi</name>
+    </author>
+    <author>
+      <name>Paolo Gambino</name>
+    </author>
+    <author>
+      <name>Stefan Schacht</name>
+    </author>
+    <arxiv:doi>10.1007/JHEP11(2017)061</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1007/JHEP11(2017)061" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2410.00837v2</id>
+    <title>Fast timing silicon R$\&amp;$D for the future Electron-Ion Collider</title>
+    <updated>2025-01-29T22:49:02Z</updated>
+    <link href="https://arxiv.org/abs/2410.00837v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2410.00837v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The proposed Electron-Ion Collider (EIC) will utilize high-luminosity high-energy electron+proton ($e+p$) and electron+nucleus ($e+A$) collisions to solve several fundamental questions including searching for gluon saturation and studying the proton/nuclear structure. Complementary to the ongoing EIC project detector technical prototype carried out by the ePIC collaboration, a Depleted Monolithic Active Pixel Sensor (i.e., MALTA2) based fast timing silicon tracking detector (FMT) has been proposed to provide additional hits for track reconstruction in the forward and backward region at the EIC to improve the overall track reconstruction quality. The fast timing resolution of the MALTA2 technology will help reject background events at the EIC as well. Progress of latest MALTA2 R$\&amp;$D, the development of a new MALTA2 quad-sensor prototype module and impacts of the proposed FMT in EIC physics studies will be discussed.</summary>
+    <category term="physics.ins-det" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="hep-ex" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="nucl-ex" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-10-01T16:17:48Z</published>
+    <arxiv:comment>4 pages, 4 figures, conference proceeding accepted for the 21st International Conference on Strangeness in Quark Matter (SQM2024) conference. This work is supported by the EIC generic R&amp;D program</arxiv:comment>
+    <arxiv:primary_category term="physics.ins-det"/>
+    <arxiv:journal_ref>EPJ Web of Conferences 316, 07003 (2025)</arxiv:journal_ref>
+    <author>
+      <name>Xuan Li</name>
+    </author>
+    <author>
+      <name>Eric Renner</name>
+    </author>
+    <author>
+      <name>Ming Liu</name>
+    </author>
+    <author>
+      <name>Walter Sondheim</name>
+    </author>
+    <author>
+      <name>Carlos Solans Sanchez</name>
+    </author>
+    <author>
+      <name>Marcos Vazquez Nuñez</name>
+    </author>
+    <author>
+      <name>Vicente Gonzalez</name>
+    </author>
+    <author>
+      <name>Yasser Corrales Morales</name>
+    </author>
+    <arxiv:doi>10.1051/epjconf/202531607003</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1051/epjconf/202531607003" title="doi"/>
+  </entry>
+</feed>

@@ -1,9 +1,7 @@
-mod layers;
-
-use crate::layers::{DiscoveryQuery};
-use crate::layers::resolution::Resolver;
-use crate::layers::download::Downloader;
-use crate::layers::discovery::DiscoveryOrchestrator;
+use openscholar::layers::{DiscoveryQuery};
+use openscholar::layers::resolution::Resolver;
+use openscholar::layers::download::Downloader;
+use openscholar::layers::discovery::DiscoveryOrchestrator;
 use dotenvy::dotenv;
 use std::env;
 use anyhow::{Result};
@@ -115,7 +113,7 @@ async fn main() -> Result<()> {
     // Save unavailable papers
     if !unavailable_matches.is_empty() {
         let unavailable_papers: Vec<_> = unavailable_matches.into_iter().map(|(p, _)| p).collect();
-        let downloader = crate::layers::download::Downloader::new(download_dir.clone());
+        let downloader = openscholar::layers::download::Downloader::new(download_dir.clone());
         if let Err(e) = downloader.save_unavailable(&query, unavailable_papers).await {
             tracing::warn!("Failed to save unavailable papers: {}", e);
         }
@@ -170,7 +168,7 @@ async fn main() -> Result<()> {
         let (paper, _) = &sorted_matches[idx];
         
         // 3. Legality Check (Layer 3) - Late binding check
-        if !crate::layers::legality::LegalityChecker::is_legally_downloadable(paper) {
+        if !openscholar::layers::legality::LegalityChecker::is_legally_downloadable(paper) {
             tracing::warn!("Skipping '{}': Not Open Access.", paper.title);
             continue;
         }

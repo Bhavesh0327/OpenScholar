@@ -1,0 +1,29 @@
+{
+  "_fixture_note": "SYNTHETIC: hand-written from the documented Graph API /paper/search shape because anonymous requests returned HTTP 429 on 2026-11-08. Replace with a recorded response once an API key is available.",
+  "total": 2,
+  "offset": 0,
+  "data": [
+    {
+      "paperId": "204e3073870fae3d05bcbc2f6a8e263d9b72e776",
+      "title": "Attention is All you Need",
+      "year": 2017,
+      "venue": "Neural Information Processing Systems",
+      "abstract": "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks.",
+      "authors": [{"authorId": "40348417", "name": "Ashish Vaswani"}, {"authorId": "1846258", "name": "Noam Shazeer"}],
+      "externalIds": {"DOI": "10.48550/arXiv.1706.03762", "ArXiv": "1706.03762", "CorpusId": 13756489},
+      "isOpenAccess": true,
+      "openAccessPdf": {"url": "https://arxiv.org/pdf/1706.03762", "status": "GREEN"}
+    },
+    {
+      "paperId": "0000000000000000000000000000000000000001",
+      "title": "A closed-access paper",
+      "year": null,
+      "venue": "",
+      "abstract": null,
+      "authors": [],
+      "externalIds": null,
+      "isOpenAccess": false,
+      "openAccessPdf": null
+    }
+  ]
+}
