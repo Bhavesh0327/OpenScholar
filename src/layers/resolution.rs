@@ -10,14 +10,24 @@ impl Resolver {
              return candidates.into_iter().map(|p| (p, 0)).collect();
         }
 
+        let query_title = Self::normalize(query_title);
         candidates.into_iter()
             .map(|p| {
-                let dist = levenshtein(query_title, &p.title);
+                let dist = levenshtein(&query_title, &Self::normalize(&p.title));
                 tracing::debug!("Candidate: {} (Distance: {})", p.title, dist);
                 (p, dist)
             })
             .filter(|(_, dist)| *dist <= threshold)
             .collect()
+    }
+
+    /// Lowercase, with punctuation and whitespace runs collapsed to single spaces.
+    pub fn normalize(title: &str) -> String {
+        title.to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     pub fn sort_by_similarity(mut matches: Vec<(PaperMetadata, usize)>) -> Vec<(PaperMetadata, usize)> {
@@ -33,6 +43,7 @@ mod tests {
     // Helper to create a dummy PaperMetadata
     fn create_dummy_paper(title: &str) -> PaperMetadata {
         PaperMetadata {
+            id: String::new(),
             title: title.to_string(),
             authors: vec![],
             year: None,
@@ -45,6 +56,7 @@ mod tests {
             pdf_url: None,
             is_oa: false,
             categories: vec![],
+            sources: vec![],
         }
     }
 
@@ -82,6 +94,14 @@ mod tests {
         let results = Resolver::resolve("Quantum Mechanics", candidates, 2);
         
         assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_resolve_ignores_case_and_punctuation() {
+        let candidates = vec![create_dummy_paper("Attention is All you Need!"), create_dummy_paper("BERT: Pre-training of Deep Bidirectional Transformers")];
+
+        assert_eq!(Resolver::resolve("attention is all you need", candidates.clone(), 0).len(), 1);
+        assert_eq!(Resolver::resolve("BERT Pre-Training of deep bidirectional transformers", candidates, 0).len(), 1);
     }
 
     #[test]
