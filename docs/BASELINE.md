@@ -51,16 +51,16 @@ Notes:
 | GAP-01 | High | **Fixed (0.2)** arXiv titles and abstracts containing XML entities are truncated to the last fragment (`R&amp;D Project` becomes `D Project`). | fixture test |
 | GAP-02 | High | **Fixed (0.2)** Semantic Scholar abstracts are always `None` (serde expects `abstractText`, but the API sends `abstract`). | fixture test |
 | GAP-03 | Medium | **Fixed (0.2)** OpenAlex `abstract_inverted_index` is not reconstructed. | fixture test |
-| GAP-04 | High | No canonical IDs. arXiv ID is `http://arxiv.org/abs/1706.03762v7`, and DOIs come as bare mixed-case or `https://doi.org/` lowercase. No dedup in `search_all`. | fixture tests |
-| GAP-05 | Medium | Papers with no DOI, arXiv or S2 ID all map to the `unknown_id/` directory and overwrite each other. The same paper from two providers lands in two different directories. | fixture tests |
-| GAP-06 | High | Interactive-only CLI. No `--json`, `--non-interactive` or `--metadata-only`. | code |
-| GAP-07 | Medium | Errors are invisible on the console, and the exit code is 0 on failure. | manual run |
-| GAP-08 | Low | Category-only search is rejected. | manual run |
-| GAP-09 | High | Title edit-distance filtering is unusable for topic search, and there is no exact-title vs topic mode. | code |
-| GAP-10 | High | No 429 handling or backoff. The SS limit is 400/s; arXiv and OpenAlex have no limiter. Anonymous SS hit 429 on the first request. | live call |
-| GAP-11 | High | No structured per-source status (count, latency, error kind). | code |
-| GAP-12 | High | Download safety: no timeout, size cap, content-type or magic-byte check, host or redirect policy, or private-IP block. Partial files are left behind on failure. | code |
-| GAP-13 | Medium | Manifest writes are not atomic, and corrupt files are reset to empty (data loss). | code |
+| GAP-04 | High | **Fixed (1.1)** No canonical IDs. arXiv ID is `http://arxiv.org/abs/1706.03762v7`, and DOIs come as bare mixed-case or `https://doi.org/` lowercase. No dedup in `search_all`. | fixture tests |
+| GAP-05 | Medium | **Fixed (1.1)** Papers with no DOI, arXiv or S2 ID all map to the `unknown_id/` directory and overwrite each other. The same paper from two providers lands in two different directories. | fixture tests |
+| GAP-06 | High | **Fixed (1.4)** Interactive-only CLI. No `--json`, `--non-interactive` or `--metadata-only`. | code |
+| GAP-07 | Medium | **Fixed (1.4)** Errors are invisible on the console, and the exit code is 0 on failure. | manual run |
+| GAP-08 | Low | **Fixed (1.3)** Category-only search is rejected. | manual run |
+| GAP-09 | High | **Fixed (1.3)** Title edit-distance filtering is unusable for topic search, and there is no exact-title vs topic mode. | code |
+| GAP-10 | High | **Fixed (1.2)** No 429 handling or backoff. The SS limit is 400/s; arXiv and OpenAlex have no limiter. Anonymous SS hit 429 on the first request. | live call |
+| GAP-11 | High | **Fixed (1.2)** No structured per-source status (count, latency, error kind). | code |
+| GAP-12 | High | **Fixed (1.5)** Download safety: no timeout, size cap, content-type or magic-byte check, host or redirect policy, or private-IP block. Partial files are left behind on failure. | code |
+| GAP-13 | Medium | **Fixed (1.5)** Manifest writes are not atomic, and corrupt files are reset to empty (data loss). | code |
 | GAP-14 | Low | Startup writes `.env` and `logs/` into the cwd. | manual run |
 | GAP-15 | Medium | Base URLs and HTTP clients are hard-coded, so network paths (retry, 429, download) cannot be tested against a mock server. | code |
 | GAP-17 | High | **Fixed (0.3)** JSON files were written with `tokio::fs::File` and never flushed, so back-to-back read-modify-writes could read a partial file, reset it to empty and lose entries. Now uses `fs::write`, and the PDF stream is flushed. | flaky test, 7/30 runs |
